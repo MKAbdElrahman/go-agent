@@ -10,20 +10,18 @@ import (
 )
 
 func main() {
-	importPath := "go-agent/calculator"
-
-	// List of functions to generate documentation for
-	functionNames := map[string]any{"Add": calculator.Add, "Subtract": calculator.Subtract, "Multiply": calculator.Multiply, "Divide": calculator.Divide}
-
-	// Generate prompts for all specified functions
-	tools, err := tools.CreateFunctionStore(importPath, functionNames)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		return
+	// List of user requests
+	userRequests := []string{
+		"What is the square root of 36?",
+		"Divide 100 by 0",
+		"Add 3 and 4.",
+		"What is the square root of -24?",
+		"Subtract 10 from 20.",
+		"Multiply 5 by 6.",
+		"What is the factorial of 5?",
+		"What is 2 raised to the power of 8?",
+		"What is the sine of 90 degrees?",
 	}
-
-	// User request
-	userRequest := "divide 4 and 3"
 
 	// Initialize the LLM engine
 	ollamaEngine, err := llm.NewOllamaEngine("llama3.1:8b")
@@ -32,15 +30,30 @@ func main() {
 		return
 	}
 
+	// Initialize memory
 	mem := memory.NewMemory()
 
-	goDeveloper := agent.NewAgent(ollamaEngine, mem, tools)
-
-	answer, err := goDeveloper.Execute(userRequest)
+	// Get public functions from the calculator package
+	functionNames := calculator.GetPublicFunctions()
+	// Create a function store for the tools
+	toolStore, err := tools.CreateFunctionStore("go-agent/calculator", functionNames)
 	if err != nil {
-		panic(err)
+		fmt.Printf("Error creating function store: %v\n", err)
+		return
 	}
 
-	fmt.Println(answer)
+	// Initialize the agent
+	goDeveloper := agent.NewAgent(ollamaEngine, mem, toolStore)
 
+	// Evaluate each user request
+	for _, request := range userRequests {
+		fmt.Printf("User Request: %s\n", request)
+
+		// Execute the request using the agent
+		response := goDeveloper.Execute(request)
+
+		// Print the response
+		fmt.Printf("Response: %+v\n", response)
+		fmt.Println("-----------------------------")
+	}
 }

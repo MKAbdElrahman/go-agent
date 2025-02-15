@@ -54,20 +54,19 @@ func NewAgent(engine LLMEngine, memory memory.Memory, tools tools.ToolStore) *Ag
 	}
 }
 
-func (a *Agent) Execute(userRequest string) (any, error) {
-	f, err := a.CallLLM(userRequest)
+func (a *Agent) Execute(userRequest string) tools.EvaluationResult {
+	functionCall, err := a.CallLLM(userRequest)
 	if err != nil {
-		return nil, err
+		return tools.EvaluationResult{Error: err}
 	}
-	return a.FunctionStore.Evaluate(f.Function, f.Arguments)
+	return a.FunctionStore.Evaluate(functionCall.Function, functionCall.Arguments)
 }
 
 func (a *Agent) CallLLM(userRequest string) (*FunctionCall, error) {
 	// Execute the template to construct the final prompt
 	tmpl, err := template.New("llmPrompt").Parse(a.Prompt)
 	if err != nil {
-		return nil, fmt.Errorf("Error creating template: %v\n", err)
-
+		return nil, fmt.Errorf("error creating template: %w", err)
 	}
 
 	// Data for the template
@@ -84,17 +83,22 @@ func (a *Agent) CallLLM(userRequest string) (*FunctionCall, error) {
 	// Write the template output to a buffer (or directly to a string)
 	var finalPrompt strings.Builder
 	if err := tmpl.Execute(&finalPrompt, data); err != nil {
-		return nil, fmt.Errorf("Error executing template: %v\n", err)
+		return nil, fmt.Errorf("error executing template: %w", err)
 	}
+
 	// Print the final prompt for debugging
-	fmt.Println("Final Prompt:\n", finalPrompt.String())
+	// fmt.Println("Final Prompt:\n", finalPrompt.String())
 
 	// Generate tokens for the final prompt
 	tokenCh, err := a.Engine.GenerateTokens(context.Background(), finalPrompt.String())
 	if err != nil {
-
-		return nil, fmt.Errorf("Error generating tokens: %v\n", err)
+		return nil, fmt.Errorf("error generating tokens: %w", err)
 	}
+
+	fmt.Println("------------------------------")
+	fmt.Println("LLM Response")
+	fmt.Println("------------------------------")
+
 	// Collect the generated tokens
 	var reply string
 	for token := range tokenCh {
@@ -102,13 +106,13 @@ func (a *Agent) CallLLM(userRequest string) (*FunctionCall, error) {
 		reply += token
 	}
 	fmt.Println()
-	var fCall FunctionCall
+	fmt.Println("------------------------------")
+
+	var functionCall FunctionCall
 	// Decode the LLM's response into the Go struct
-	if err := json.Unmarshal([]byte(reply), &fCall); err != nil {
-		return nil, fmt.Errorf("Error decoding LLM response: %v\n", err)
+	if err := json.Unmarshal([]byte(reply), &functionCall); err != nil {
+		return nil, fmt.Errorf("error decoding LLM response: %w", err)
 	}
 
-	fmt.Printf("Parsed LLM Response to the Function Call %v:\n", fCall)
-
-	return &fCall, nil
+	return &functionCall, nil
 }

@@ -1,0 +1,16 @@
+name: Domain
+children:
+  - name: Subdomain1
+    children:
+      - name: SubSubdomain1
+        children:
+          - name: Component1
+          - name: Component2
+      - name: SubSubdomain2
+        children:
+          - name: Component3
+  - name: Subdomain2
+    children:
+      - name: SubSubdomain3
+        children:
+          - name: Component4

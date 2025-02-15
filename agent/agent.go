@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go-agent/evaluate"
 	"go-agent/memory"
 	"go-agent/tools"
 	"strings"
@@ -54,12 +55,12 @@ func NewAgent(engine LLMEngine, memory memory.Memory, tools tools.ToolStore) *Ag
 	}
 }
 
-func (a *Agent) Execute(userRequest string) tools.EvaluationResult {
+func (a *Agent) Execute(userRequest string) evaluate.EvaluationResult {
 	functionCall, err := a.CallLLM(userRequest)
 	if err != nil {
-		return tools.EvaluationResult{Error: err}
+		return evaluate.EvaluationResult{Error: err}
 	}
-	return a.FunctionStore.Evaluate(functionCall.Function, functionCall.Arguments)
+	return evaluate.Evaluate(a.FunctionStore, functionCall.Function, functionCall.Arguments)
 }
 
 func (a *Agent) CallLLM(userRequest string) (*FunctionCall, error) {

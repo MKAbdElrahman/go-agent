@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"go-agent/calculator"
+	"go-agent/evaluate"
 	"go-agent/tools"
 )
 
@@ -15,7 +16,7 @@ func main() {
 		return
 	}
 
-	result := store.Evaluate("Divide", []any{1, 0})
+	result := evaluate.Evaluate(store, "Divide", []any{1, 0})
 
 	fmt.Println("Result: ", result.Result)
 	fmt.Println("Error: ", result.Error)

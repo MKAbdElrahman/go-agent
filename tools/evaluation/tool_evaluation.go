@@ -1,19 +1,25 @@
-package tools
+package evaluation
 
 import (
+	"errors"
 	"fmt"
 	"go-agent/metadata"
 	"reflect"
 )
 
+var (
+	ErrNotAFunction     = errors.New("entry is not a function")
+	ErrArgumentMismatch = errors.New("argument count mismatch")
+	ErrArgumentType     = errors.New("argument type mismatch")
+	ErrFunctionPanic    = errors.New("function execution panicked")
+)
+
 // Tool represents a function along with its metadata and documentation.
 type Tool struct {
 	Metadata metadata.FunctionMetaData `json:"metadata"`
-	Doc      string                    `json:"doc"`
 	Function interface{}               `json:"function"`
 }
 
-// Evaluate executes the function stored in the Tool with the provided arguments.
 func (t Tool) Evaluate(args []interface{}) ([]interface{}, error) {
 	functionValue := reflect.ValueOf(t.Function)
 	if functionValue.Kind() != reflect.Func {
@@ -21,8 +27,17 @@ func (t Tool) Evaluate(args []interface{}) ([]interface{}, error) {
 	}
 
 	functionType := functionValue.Type()
-	if len(args) != functionType.NumIn() {
-		return nil, fmt.Errorf("%w: expected %d arguments, got %d", ErrArgumentMismatch, functionType.NumIn(), len(args))
+	isVariadic := functionType.IsVariadic()
+	numIn := functionType.NumIn()
+
+	if isVariadic {
+		if len(args) < numIn-1 {
+			return nil, fmt.Errorf("%w: expected at least %d arguments, got %d", ErrArgumentMismatch, numIn-1, len(args))
+		}
+	} else {
+		if len(args) != numIn {
+			return nil, fmt.Errorf("%w: expected %d arguments, got %d", ErrArgumentMismatch, numIn, len(args))
+		}
 	}
 
 	argValues, err := convertArguments(args, functionType)
@@ -40,11 +55,36 @@ func (t Tool) Evaluate(args []interface{}) ([]interface{}, error) {
 
 // convertArguments converts and validates the provided arguments against the function's expected types.
 func convertArguments(args []interface{}, functionType reflect.Type) ([]reflect.Value, error) {
-	argValues := make([]reflect.Value, len(args))
-	for i, arg := range args {
-		argValue := reflect.ValueOf(arg)
-		expectedType := functionType.In(i)
+	numIn := functionType.NumIn()
+	isVariadic := functionType.IsVariadic()
+	argValues := make([]reflect.Value, 0, len(args))
 
+	for i, arg := range args {
+		var expectedType reflect.Type
+
+		if isVariadic && i >= numIn-1 {
+			// For variadic functions, the last argument type is the element type of the slice.
+			expectedType = functionType.In(numIn - 1).Elem()
+		} else {
+			expectedType = functionType.In(i)
+		}
+
+		argValue := reflect.ValueOf(arg)
+
+		// Handle slices for variadic functions
+		if isVariadic && i >= numIn-1 && argValue.Kind() == reflect.Slice {
+			// Unpack the slice into individual arguments
+			for j := 0; j < argValue.Len(); j++ {
+				elem := argValue.Index(j)
+				if !elem.Type().AssignableTo(expectedType) {
+					return nil, fmt.Errorf("argument %d (element %d): expected %s, got %s", i+1, j+1, expectedType, elem.Type())
+				}
+				argValues = append(argValues, elem)
+			}
+			continue
+		}
+
+		// Handle non-slice arguments
 		if !argValue.Type().AssignableTo(expectedType) {
 			if argValue.CanConvert(expectedType) {
 				argValue = argValue.Convert(expectedType)
@@ -52,16 +92,17 @@ func convertArguments(args []interface{}, functionType reflect.Type) ([]reflect.
 				return nil, fmt.Errorf("argument %d: expected %s, got %s", i+1, expectedType, argValue.Type())
 			}
 		}
-		argValues[i] = argValue
+
+		argValues = append(argValues, argValue)
 	}
+
 	return argValues, nil
 }
 
-// callFunction calls the function with the provided arguments and handles panics.
 func callFunction(functionValue reflect.Value, argValues []reflect.Value) (results []reflect.Value, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("panic: %v", r)
+			err = fmt.Errorf("function panicked with argument(s) %v: %v", argValues, r)
 		}
 	}()
 
@@ -69,7 +110,6 @@ func callFunction(functionValue reflect.Value, argValues []reflect.Value) (resul
 	return results, nil
 }
 
-// extractResults processes the function's return values, separating results from errors.
 func extractResults(results []reflect.Value) ([]interface{}, error) {
 	if len(results) == 0 {
 		return nil, nil
@@ -86,7 +126,6 @@ func extractResults(results []reflect.Value) ([]interface{}, error) {
 	return convertResults(results), nil
 }
 
-// convertResults converts reflect.Value results to interface{}.
 func convertResults(results []reflect.Value) []interface{} {
 	converted := make([]interface{}, len(results))
 	for i, res := range results {

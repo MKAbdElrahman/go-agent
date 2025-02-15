@@ -3,20 +3,20 @@ package main
 import (
 	"fmt"
 	"go-agent/calculator"
-	"go-agent/tools"
+	"go-agent/tools/toolstore"
 )
 
 func main() {
 	importPath := "go-agent/calculator"
 
-	store, err := tools.NewFunctionStoreFromPkg(importPath, calculator.FunctionRegistry(), nil)
+	store, err := toolstore.NewFunctionStoreFromPkg(importPath, calculator.FunctionRegistry(), nil)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
 	}
 
-	f, ok := store.GetTool("Divide")
-	if !ok {
+	f, err := store.GetTool("Divide")
+	if err != nil {
 		fmt.Printf("function '%s' not found in tool store", f.Function)
 		return
 	}

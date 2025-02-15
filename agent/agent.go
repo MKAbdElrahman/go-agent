@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go-agent/memory"
-	"go-agent/tools"
+	"go-agent/metadata"
+	"go-agent/tools/toolstore"
 	"strings"
 	"text/template"
 )
@@ -21,11 +21,6 @@ Below are the available functions and their documentation. Respond to user reque
 Here are the functions and their documentation:
 {{.Tools}}
 
-{{if .Memory}}
-### Interaction History:
-{{.Memory}}
-{{end}}
-
 User Request: {{.UserRequest}}`
 
 type LLMEngine interface {
@@ -40,17 +35,15 @@ type FunctionCall struct {
 type Agent struct {
 	Engine        LLMEngine
 	Prompt        string
-	FunctionStore *tools.ToolStore // Map of function names to their documentation prompts
-	Memory        memory.Memory    // History of interactions
+	FunctionStore *toolstore.ToolStore // Map of function names to their documentation prompts
 }
 
 // NewAgent creates a new Agent instance with the specified LLM engine and prompts.
-func NewAgent(engine LLMEngine, memory memory.Memory, tools *tools.ToolStore) *Agent {
+func NewAgent(engine LLMEngine, tools *toolstore.ToolStore) *Agent {
 	return &Agent{
 		Engine:        engine,
 		Prompt:        promptTemplate,
 		FunctionStore: tools,
-		Memory:        memory,
 	}
 }
 
@@ -60,8 +53,8 @@ func (a *Agent) Execute(userRequest string) ([]any, error) {
 		return nil, err
 	}
 
-	tool, ok := a.FunctionStore.GetTool(functionCall.Function)
-	if !ok {
+	tool, err := a.FunctionStore.GetTool(functionCall.Function)
+	if err != nil {
 		return nil, fmt.Errorf("function '%s' not found in tool store", functionCall.Function)
 	}
 
@@ -79,11 +72,9 @@ func (a *Agent) CallLLM(userRequest string) (*FunctionCall, error) {
 	data := struct {
 		Tools       string
 		UserRequest string
-		Memory      string
 	}{
-		Tools:       a.FunctionStore.CombineToolsDoc(),
+		Tools:       combineToolsDoc(a.FunctionStore),
 		UserRequest: userRequest,
-		Memory:      a.Memory.String(),
 	}
 
 	// Write the template output to a buffer (or directly to a string)
@@ -101,10 +92,6 @@ func (a *Agent) CallLLM(userRequest string) (*FunctionCall, error) {
 		return nil, fmt.Errorf("error generating tokens: %w", err)
 	}
 
-	fmt.Println("------------------------------")
-	fmt.Println("LLM Response")
-	fmt.Println("------------------------------")
-
 	// Collect the generated tokens
 	var reply string
 	for token := range tokenCh {
@@ -121,4 +108,56 @@ func (a *Agent) CallLLM(userRequest string) (*FunctionCall, error) {
 	}
 
 	return &functionCall, nil
+}
+
+// CombineToolsDoc combines the documentation of all tools in the ToolStore.
+func combineToolsDoc(ts *toolstore.ToolStore) string {
+
+	var combinedPrompt strings.Builder
+	combinedPrompt.WriteString("=== Combined Function Prompts ===\n\n")
+
+	for functionName, entry := range ts.Tools() {
+		combinedPrompt.WriteString(fmt.Sprintf("--- Function: %s ---\n", functionName))
+		combinedPrompt.WriteString(generatePrompt(entry.Metadata))
+		combinedPrompt.WriteString("\n\n")
+	}
+
+	return combinedPrompt.String()
+}
+
+// generatePrompt creates a human-readable prompt for a function based on its metadata.
+func generatePrompt(meta metadata.FunctionMetaData) string {
+	var prompt strings.Builder
+
+	prompt.WriteString(fmt.Sprintf("Function: %s\nDescription: %s\n", meta.FunctionName, meta.Description))
+
+	if len(meta.Params) > 0 {
+		prompt.WriteString("Parameters:\n")
+		for _, param := range meta.Params {
+			prompt.WriteString(fmt.Sprintf("  - %s: %s\n", param.Name, param.Desc))
+		}
+	}
+
+	if len(meta.Return) > 0 {
+		prompt.WriteString("Returns:\n")
+		for _, ret := range meta.Return {
+			prompt.WriteString(fmt.Sprintf("  - %s: %s\n", ret.Type, ret.Description))
+		}
+	}
+
+	if len(meta.Constraints) > 0 {
+		prompt.WriteString("Constraints:\n")
+		for _, constraint := range meta.Constraints {
+			prompt.WriteString(fmt.Sprintf("  - %s: %s\n", constraint.Condition, constraint.Desc))
+		}
+	}
+
+	if len(meta.Examples) > 0 {
+		prompt.WriteString("Examples:\n")
+		for _, example := range meta.Examples {
+			prompt.WriteString(fmt.Sprintf("  - %s\n", example))
+		}
+	}
+
+	return prompt.String()
 }

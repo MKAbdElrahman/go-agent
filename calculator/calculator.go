@@ -21,6 +21,7 @@ func FunctionRegistry() map[string]interface{} {
 		"Tan":        Tan,
 		"Log":        Log,
 		"Log10":      Log10,
+		"Sum":        Sum,
 	}
 }
 
@@ -160,4 +161,16 @@ func Log10(x float64) (float64, error) {
 		return 0, errors.New("logarithm of a non-positive number is not allowed")
 	}
 	return math.Log10(x), nil
+}
+
+// Sum returns the sum of a variadic list of numbers.
+// @param numbers: A variadic list of numbers to sum.
+// @return float64: The sum of all input numbers.
+// @example: Sum(1, 2, 3, 4, 5) // returns 15
+func Sum(numbers ...float64) float64 {
+	total := 0.0
+	for _, num := range numbers {
+		total += num
+	}
+	return total
 }

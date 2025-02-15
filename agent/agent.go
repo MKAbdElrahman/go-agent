@@ -54,6 +54,14 @@ func NewAgent(engine LLMEngine, memory memory.Memory, tools tools.ToolStore) *Ag
 	}
 }
 
+func (a *Agent) Execute(userRequest string) (any, error) {
+	f, err := a.CallLLM(userRequest)
+	if err != nil {
+		return nil, err
+	}
+	return a.FunctionStore.Evaluate(f.Function, f.Arguments)
+}
+
 func (a *Agent) CallLLM(userRequest string) (*FunctionCall, error) {
 	// Execute the template to construct the final prompt
 	tmpl, err := template.New("llmPrompt").Parse(a.Prompt)

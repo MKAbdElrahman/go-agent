@@ -36,14 +36,11 @@ func main() {
 
 	goDeveloper := agent.NewAgent(ollamaEngine, mem, tools)
 
-	f, err := goDeveloper.CallLLM(userRequest)
+	answer, err := goDeveloper.Execute(userRequest)
 	if err != nil {
 		panic(err)
 	}
-	res, err := tools.Evaluate(f.Function, f.Arguments)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(res...)
+
+	fmt.Println(answer)
 
 }

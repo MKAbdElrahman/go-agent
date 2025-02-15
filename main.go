@@ -7,6 +7,7 @@ import (
 	"go-agent/llm"
 	"go-agent/memory"
 	"go-agent/tools"
+	"log"
 )
 
 func main() {
@@ -34,9 +35,8 @@ func main() {
 	mem := memory.NewMemory()
 
 	// Get public functions from the calculator package
-	functionNames := calculator.GetPublicFunctions()
 	// Create a function store for the tools
-	toolStore, err := tools.CreateFunctionStore("go-agent/calculator", functionNames)
+	toolStore, err := tools.NewFunctionStoreFromPkg("go-agent/calculator", calculator.FunctionRegistry(), nil)
 	if err != nil {
 		fmt.Printf("Error creating function store: %v\n", err)
 		return
@@ -50,7 +50,10 @@ func main() {
 		fmt.Printf("User Request: %s\n", request)
 
 		// Execute the request using the agent
-		response := goDeveloper.Execute(request)
+		response, err := goDeveloper.Execute(request)
+		if err != nil {
+			log.Printf("Error: %+v\n", err)
+		}
 
 		// Print the response
 		fmt.Printf("Response: %+v\n", response)

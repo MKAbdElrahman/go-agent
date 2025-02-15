@@ -6,7 +6,7 @@ import (
 	"math"
 )
 
-func GetPublicFunctions() map[string]interface{} {
+func FunctionRegistry() map[string]interface{} {
 	return map[string]interface{}{
 		"Add":        Add,
 		"Subtract":   Subtract,

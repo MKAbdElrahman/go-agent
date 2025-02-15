@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go-agent/evaluate"
 	"go-agent/memory"
 	"go-agent/tools"
 	"strings"
@@ -41,12 +40,12 @@ type FunctionCall struct {
 type Agent struct {
 	Engine        LLMEngine
 	Prompt        string
-	FunctionStore tools.ToolStore // Map of function names to their documentation prompts
-	Memory        memory.Memory   // History of interactions
+	FunctionStore *tools.ToolStore // Map of function names to their documentation prompts
+	Memory        memory.Memory    // History of interactions
 }
 
 // NewAgent creates a new Agent instance with the specified LLM engine and prompts.
-func NewAgent(engine LLMEngine, memory memory.Memory, tools tools.ToolStore) *Agent {
+func NewAgent(engine LLMEngine, memory memory.Memory, tools *tools.ToolStore) *Agent {
 	return &Agent{
 		Engine:        engine,
 		Prompt:        promptTemplate,
@@ -55,12 +54,18 @@ func NewAgent(engine LLMEngine, memory memory.Memory, tools tools.ToolStore) *Ag
 	}
 }
 
-func (a *Agent) Execute(userRequest string) evaluate.EvaluationResult {
+func (a *Agent) Execute(userRequest string) ([]any, error) {
 	functionCall, err := a.CallLLM(userRequest)
 	if err != nil {
-		return evaluate.EvaluationResult{Error: err}
+		return nil, err
 	}
-	return evaluate.Evaluate(a.FunctionStore, functionCall.Function, functionCall.Arguments)
+
+	tool, ok := a.FunctionStore.GetTool(functionCall.Function)
+	if !ok {
+		return nil, fmt.Errorf("function '%s' not found in tool store", functionCall.Function)
+	}
+
+	return tool.Evaluate(functionCall.Arguments)
 }
 
 func (a *Agent) CallLLM(userRequest string) (*FunctionCall, error) {

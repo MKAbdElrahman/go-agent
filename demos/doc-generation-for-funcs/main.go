@@ -3,22 +3,29 @@ package main
 import (
 	"fmt"
 	"go-agent/calculator"
-	"go-agent/evaluate"
 	"go-agent/tools"
 )
 
 func main() {
 	importPath := "go-agent/calculator"
 
-	store, err := tools.CreateFunctionStore(importPath, map[string]interface{}{"Divide": calculator.Divide})
+	store, err := tools.NewFunctionStoreFromPkg(importPath, calculator.FunctionRegistry(), nil)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
 	}
 
-	result := evaluate.Evaluate(store, "Divide", []any{1, 0})
+	f, ok := store.GetTool("Divide")
+	if !ok {
+		fmt.Printf("function '%s' not found in tool store", f.Function)
+		return
+	}
+	result, err := f.Evaluate([]any{1, 0})
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
 
-	fmt.Println("Result: ", result.Result)
-	fmt.Println("Error: ", result.Error)
+	fmt.Println("Result: ", result)
 
 }

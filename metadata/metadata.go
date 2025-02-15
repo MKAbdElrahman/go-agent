@@ -1,4 +1,4 @@
-package tools
+package metadata
 
 import (
 	"encoding/json"
@@ -11,101 +11,14 @@ import (
 	"strings"
 )
 
-type ToolStore map[string]Tool
-
-type Tool struct {
-	Metadata FunctionMetaData `json:"metadata"`
-	Doc      string           `json:"doc"`      // Generated prompt
-	Function interface{}      `json:"function"` // The function object (as an interface{})
-}
-
-// CreateFunctionStore creates a function store for the given import path and funcMap.
-// The Doc field contains the generated prompt, and the Function field contains the function object.
-func CreateFunctionStore(importPath string, funcMap map[string]interface{}) (ToolStore, error) {
-	store := make(ToolStore)
-
-	// Iterate over the funcMap to process each function
-	for functionName, function := range funcMap {
-		// Step 1: Get the documentation for the function
-		doc, err := getDocumentation(importPath, functionName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get documentation for function '%s': %v", functionName, err)
-		}
-
-		// Step 2: Parse the documentation into metadata
-		metadata := parseDocumentation(functionName, doc)
-
-		// Step 3: Generate the prompt
-		prompt := generatePrompt(metadata)
-
-		// Step 4: Store the metadata, prompt, and function object in the function store
-		store[functionName] = Tool{
-			Metadata: metadata,
-			Doc:      prompt,
-			Function: function,
-		}
+func ExtractMetadata(importPath, name string) (FunctionMetaData, error) {
+	doc, err := getDocumentation(importPath, name)
+	if err != nil {
+		return FunctionMetaData{}, err
 	}
 
-	return store, nil
-}
-
-func (s ToolStore) CombineToolsDoc() string {
-	var combinedPrompt strings.Builder
-
-	// Add a header for the combined prompt
-	combinedPrompt.WriteString("=== Combined Function Prompts ===\n\n")
-
-	// Iterate over the function store and append each prompt
-	for functionName, entry := range s {
-		combinedPrompt.WriteString(fmt.Sprintf("--- Function: %s ---\n", functionName))
-		combinedPrompt.WriteString(entry.Doc)
-		combinedPrompt.WriteString("\n\n") // Add spacing between functions
-	}
-
-	return combinedPrompt.String()
-}
-
-// GeneratePrompt creates a human-readable prompt for an AI agent to understand how to use the function.
-func generatePrompt(meta FunctionMetaData) string {
-	var prompt strings.Builder
-
-	// Add function name and description
-	prompt.WriteString(fmt.Sprintf("Function: %s\n", meta.FunctionName))
-	prompt.WriteString(fmt.Sprintf("Description: %s\n", meta.Description))
-
-	// Add parameters
-	if len(meta.Params) > 0 {
-		prompt.WriteString("Parameters:\n")
-		for _, param := range meta.Params {
-			prompt.WriteString(fmt.Sprintf("  - %s: %s\n", param.Name, param.Desc))
-		}
-	}
-
-	// Add return values
-	if len(meta.Return) > 0 {
-		prompt.WriteString("Returns:\n")
-		for _, ret := range meta.Return {
-			prompt.WriteString(fmt.Sprintf("  - %s: %s\n", ret.Type, ret.Description))
-		}
-	}
-
-	// Add constraints
-	if len(meta.Constraints) > 0 {
-		prompt.WriteString("Constraints:\n")
-		for _, constraint := range meta.Constraints {
-			prompt.WriteString(fmt.Sprintf("  - %s: %s\n", constraint.Condition, constraint.Desc))
-		}
-	}
-
-	// Add examples
-	if len(meta.Examples) > 0 {
-		prompt.WriteString("Examples:\n")
-		for _, example := range meta.Examples {
-			prompt.WriteString(fmt.Sprintf("  - %s\n", example))
-		}
-	}
-
-	return prompt.String()
+	meta := parseDocumentation(name, doc)
+	return meta, nil
 }
 
 // FunctionMetaData represents structured metadata extracted from the function documentation.
@@ -145,7 +58,7 @@ func (meta FunctionMetaData) ToJSON() (string, error) {
 	return string(jsonData), nil
 }
 
-// ParseDocumentation parses the documentation string and extracts metadata.
+// parseDocumentation parses the documentation string and extracts metadata.
 func parseDocumentation(functionName, doc string) FunctionMetaData {
 	meta := FunctionMetaData{
 		FunctionName: functionName,
@@ -200,7 +113,7 @@ func parseDocumentation(functionName, doc string) FunctionMetaData {
 	return meta
 }
 
-// GetDocumentation retrieves the documentation for a function or type in a package.
+// getDocumentation retrieves the documentation for a function or type in a package.
 func getDocumentation(importPath, name string) (string, error) {
 	// Create a new file set.
 	fset := token.NewFileSet()

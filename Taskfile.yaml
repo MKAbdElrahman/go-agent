@@ -4,3 +4,9 @@ version: 3
 tasks:
 
   run: go run . 
+  reset-to-origin:
+    cmds:
+      - git fetch origin
+      - git checkout main
+      - git reset --hard origin/main
+      - git clean -fd
